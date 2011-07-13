@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     
     <groupId>com.aperigeek.dropvault</groupId>
-    <artifactId>dropvault-web</artifactId>
+    <artifactId>dropvault-server</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>war</packaging>
 
