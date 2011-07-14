@@ -32,6 +32,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.UriBuilder;
+import org.json.JSONArray;
 
 /**
  *
@@ -50,6 +51,7 @@ public class SearchService {
     private MongoFileService fileService;
     
     @GET
+    @Produces("application/json")
     public String query(@PathParam("user") String user,
             @QueryParam("password") String password,
             @PathParam("query") String query) throws IndexException {
@@ -78,7 +80,8 @@ public class SearchService {
             uris.add(builder.build().toString());
         }
         
-        return uris.toString();
+        JSONArray array = new JSONArray(uris);
+        return array.toString();
     }
     
 }
