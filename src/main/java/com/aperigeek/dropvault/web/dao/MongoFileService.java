@@ -181,6 +181,14 @@ public class MongoFileService {
         return buildResource(obj);
     }
     
+    public Resource getResource(String id) {
+        ObjectId oid = new ObjectId(id);
+        DBObject query = new BasicDBObject("_id", oid);
+        DBCollection files = mongo.getDataBase().getCollection("files");
+        DBObject result = files.findOne(query);
+        return buildResource(result);
+    }
+    
     public Resource getResource(String username, String resource) throws ResourceNotFoundException {
         String[] path = resource.split("/");
         Resource parent = getRootFolder(username);
@@ -191,6 +199,14 @@ public class MongoFileService {
             parent = getChild(parent, path[i]);
         }
         return parent;
+    }
+    
+    public Resource getParent(Resource res) {
+        DBCollection files = mongo.getDataBase().getCollection("files");
+        DBObject resQuery = new BasicDBObject("_id", res.getId());
+        DBObject dbRes = files.findOne(resQuery);
+        DBObject dbParent = files.findOne(new BasicDBObject("_id", dbRes.get("parent")));
+        return buildResource(dbParent);
     }
     
     public void put(String username, String resource, byte[] data, 

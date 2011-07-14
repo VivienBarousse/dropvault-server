@@ -16,14 +16,22 @@
  */
 package com.aperigeek.dropvault.web.rest;
 
+import com.aperigeek.dropvault.web.beans.Resource;
+import com.aperigeek.dropvault.web.dao.MongoFileService;
 import com.aperigeek.dropvault.web.service.IndexException;
 import com.aperigeek.dropvault.web.service.IndexService;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Stack;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.UriBuilder;
 
 /**
  *
@@ -33,14 +41,44 @@ import javax.ws.rs.QueryParam;
 @Stateless
 public class SearchService {
     
+    public static final String DAV_BASE = "/";
+    
     @EJB
     private IndexService indexService;
+    
+    @EJB
+    private MongoFileService fileService;
     
     @GET
     public String query(@PathParam("user") String user,
             @QueryParam("password") String password,
             @PathParam("query") String query) throws IndexException {
-        return indexService.search(user, password, query).toString();
+        
+        URI userUri = URI.create(DAV_BASE);
+        
+        List<String> uris = new ArrayList<String>();
+        List<String> ids = indexService.search(user, password, query);
+        for (String id : ids) {
+            Resource res = fileService.getResource(id);
+            Stack<Resource> path = new Stack<Resource>();
+            Resource parent = res;
+            while (parent != null) {
+                path.push(parent);
+                parent = fileService.getParent(parent);
+            }
+            
+            // Remove the user's root folder, we don't want it in the path
+            path.pop();
+            
+            UriBuilder builder = UriBuilder.fromUri(userUri);
+            while (!path.empty()) {
+                Resource e = path.pop();
+                builder.path(e.getName());
+            }
+            uris.add(builder.build().toString());
+        }
+        
+        return uris.toString();
     }
     
 }
