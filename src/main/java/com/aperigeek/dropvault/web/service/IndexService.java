@@ -16,11 +16,20 @@
  */
 package com.aperigeek.dropvault.web.service;
 
+import com.aperigeek.dropvault.web.service.index.CipherDirectory;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.security.KeyStore;
+import java.security.KeyStore.SecretKeyEntry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.ejb.Stateless;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
@@ -37,7 +46,6 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.SimpleFSDirectory;
 import org.apache.lucene.util.Version;
 
 /**
@@ -48,6 +56,8 @@ import org.apache.lucene.util.Version;
 public class IndexService {
     
     private static final File INDEX_FOLDER = new File("/home/dropvault/indexes");
+    
+    private static final File secretsFolder = new File("/home/dropvault/secret");
     
     public void index(String username, String password, 
             String id, Map<String, String> metadata) throws IndexException {
@@ -116,8 +126,44 @@ public class IndexService {
         if (!userIndex.exists()) {
             userIndex.mkdirs();
         }
-        Directory directory = new SimpleFSDirectory(userIndex);
+        Directory directory = new CipherDirectory(userIndex, getSecretKey(username, password.toCharArray()));
         return directory;
+    }
+    
+    protected SecretKey getSecretKey(String username, char[] password) {
+        try {
+            KeyStore store = getKeyStore(username, password);
+            SecretKeyEntry entry = (SecretKeyEntry) store.getEntry(username, new KeyStore.PasswordProtection(password));
+            return entry.getSecretKey();
+        } catch (Exception ex) {
+            // TODO: better exception handling
+            throw new RuntimeException(ex);
+        }
+    }
+    
+    protected KeyStore getKeyStore(String username, char[] password) {
+        try {
+            File keyStoreFile = new File(secretsFolder, username + ".jks");
+            KeyStore keyStore = KeyStore.getInstance("JCEKS");
+            if (keyStoreFile.exists()) {
+                keyStore.load(new FileInputStream(keyStoreFile), password);
+                return keyStore;
+            } else {
+                KeyGenerator gen = KeyGenerator.getInstance("Blowfish");
+                SecretKey key = gen.generateKey();
+                
+                keyStore.load(null, password);
+                keyStore.setEntry(username, new SecretKeyEntry(key), new KeyStore.PasswordProtection(password));
+                
+                keyStore.store(new FileOutputStream(keyStoreFile), password);
+                
+                return keyStore;
+            }
+        } catch (Exception ex) {
+            // TODO: better exception handling
+            Logger.getAnonymousLogger().log(Level.SEVERE, "ERROR", ex);
+            throw new RuntimeException(ex);
+        }
     }
     
 }
