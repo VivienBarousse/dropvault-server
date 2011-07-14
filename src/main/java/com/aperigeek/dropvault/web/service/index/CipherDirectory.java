@@ -22,7 +22,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.HashMap;
+import javax.crypto.Cipher;
+import javax.crypto.CipherInputStream;
+import javax.crypto.CipherOutputStream;
+import javax.crypto.SecretKey;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.SimpleFSDirectory;
@@ -33,8 +36,23 @@ import org.apache.lucene.store.SimpleFSDirectory;
  */
 public class CipherDirectory extends SimpleFSDirectory {
 
-    public CipherDirectory(File path) throws IOException {
+    private SecretKey key;
+    
+    public CipherDirectory(File path, SecretKey key) throws IOException {
         super(path);
+        this.key = key;
+    }
+
+    /*
+     * TODO: Performance issue!
+     * The content of the file has to be decrypted to
+     * determine with precision the actual file length...
+     * Maybe something more efficient can be done instead.
+     */
+    @Override
+    public long fileLength(String name) throws IOException {
+        File file = new File(getDirectory(), name);
+        return getByteBuffer(file).length;
     }
 
     @Override
@@ -42,6 +60,11 @@ public class CipherDirectory extends SimpleFSDirectory {
         File file = new File(getDirectory(), name);
         CipherIndexInput input = new CipherIndexInput(file);
         return input;
+    }
+
+    @Override
+    public IndexInput openInput(String name, int bufferSize) throws IOException {
+        return openInput(name);
     }
 
     @Override
@@ -55,17 +78,31 @@ public class CipherDirectory extends SimpleFSDirectory {
             return new DynamicByteBuffer();
         }
         
-        InputStream in = new FileInputStream(file);
+        InputStream plain = new FileInputStream(file);
+        InputStream in = new CipherInputStream(plain, getCipher(Cipher.DECRYPT_MODE));
         
-        DynamicByteBuffer byteBuffer = new DynamicByteBuffer((int) file.length());
-        byte[] src = new byte[4096];
+        DynamicByteBuffer byteBuffer = new DynamicByteBuffer();
+        byte[] src = new byte[2048];
         int readed;
-        while ((readed = in.read(src, 0, 4096)) != -1) {
+        while ((readed = in.read(src)) != -1) {
             byteBuffer.put(src, 0, readed);
         }
         byteBuffer.setPosition(0);
         
+        in.close();
+        plain.close();
+        
         return byteBuffer;
+    }
+    
+    protected Cipher getCipher(int mode) {
+        try {
+            Cipher cipher = Cipher.getInstance("Blowfish");
+            cipher.init(mode, key);
+            return cipher;
+        } catch (Exception ex) {
+            throw new RuntimeException("Bad configuration", ex);
+        }
     }
 
     public class CipherIndexInput extends IndexInput {
@@ -113,11 +150,6 @@ public class CipherDirectory extends SimpleFSDirectory {
             byteBuffer = getByteBuffer(file);
         }
         
-        public void reload() throws IOException {
-            load();
-            System.out.println("Reloaded index");
-        }
-        
     }
 
     public class CipherIndexOutput extends IndexOutput {
@@ -133,9 +165,12 @@ public class CipherDirectory extends SimpleFSDirectory {
 
         @Override
         public void flush() throws IOException {
-            OutputStream out = new FileOutputStream(file);
+            OutputStream plaout = new FileOutputStream(file);
+            OutputStream out = new CipherOutputStream(plaout, getCipher(Cipher.ENCRYPT_MODE));
             out.write(byteBuffer.toByteArray());
+            out.flush();
             out.close();
+            plaout.close();
         }
 
         @Override
@@ -237,7 +272,6 @@ public class CipherDirectory extends SimpleFSDirectory {
         
         protected void ensureCapacity(int min) {
             if (min > buffer.length) {
-                System.out.println("RESIZE!");
                 int newLength = buffer.length;
                 while (newLength > 0 && newLength < min) {
                     newLength *= 2;
@@ -249,23 +283,6 @@ public class CipherDirectory extends SimpleFSDirectory {
                 System.arraycopy(buffer, 0, newBuffer, 0, length);
                 buffer = newBuffer;
             }
-        }
-        
-    }
-    
-    private static class IndexInputRef {
-        
-        CipherIndexInput input;
-        
-        IndexInputRef next;
-
-        public IndexInputRef(CipherIndexInput input) {
-            this.input = input;
-        }
-
-        public IndexInputRef(CipherIndexInput input, IndexInputRef next) {
-            this.input = input;
-            this.next = next;
         }
         
     }
