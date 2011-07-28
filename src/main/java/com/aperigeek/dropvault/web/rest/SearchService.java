@@ -17,20 +17,28 @@
 package com.aperigeek.dropvault.web.rest;
 
 import com.aperigeek.dropvault.web.beans.Resource;
+import com.aperigeek.dropvault.web.beans.User;
 import com.aperigeek.dropvault.web.dao.MongoFileService;
+import com.aperigeek.dropvault.web.dao.user.InvalidPasswordException;
+import com.aperigeek.dropvault.web.rest.webdav.NotAuthorizedException;
+import com.aperigeek.dropvault.web.rest.webdav.ProtocolException;
+import com.aperigeek.dropvault.web.service.AuthenticationService;
 import com.aperigeek.dropvault.web.service.IndexException;
 import com.aperigeek.dropvault.web.service.IndexService;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Stack;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
 import javax.ws.rs.GET;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.core.Response;
 import javax.ws.rs.core.UriBuilder;
 import org.json.JSONArray;
 
@@ -38,7 +46,7 @@ import org.json.JSONArray;
  *
  * @author Vivien Barousse
  */
-@Path("query/{user}/{query}")
+@Path("query")
 @Stateless
 public class SearchService {
     
@@ -50,16 +58,31 @@ public class SearchService {
     @EJB
     private MongoFileService fileService;
     
+    @EJB
+    private AuthenticationService authenticationService;
+    
     @GET
     @Produces("application/json")
-    public String query(@PathParam("user") String user,
-            @QueryParam("password") String password,
-            @PathParam("query") String query) throws IndexException {
+    public Response query(@HeaderParam("Authorization") String authorization,
+            @QueryParam("q") String query) throws IndexException {
+        
+        User user;
+        try {
+            user = authenticationService.checkAuthentication(authorization);
+        } catch (InvalidPasswordException ex) {
+            return Response.status(401)
+                    .header("WWW-Authenticate", "Basic realm=\"Search authentication\"")
+                    .build();
+        } catch (NotAuthorizedException ex) {
+            return Response.status(403).build();
+        } catch (ProtocolException ex) {
+            return Response.status(400).build();
+        }
         
         URI userUri = URI.create(DAV_BASE);
         
         List<String> uris = new ArrayList<String>();
-        List<String> ids = indexService.search(user, password, query);
+        List<String> ids = indexService.search(user.getUsername(), user.getPassword(), query);
         for (String id : ids) {
             Resource res = fileService.getResource(id);
             Stack<Resource> path = new Stack<Resource>();
@@ -81,7 +104,7 @@ public class SearchService {
         }
         
         JSONArray array = new JSONArray(uris);
-        return array.toString();
+        return Response.ok(array.toString()).build();
     }
     
 }
