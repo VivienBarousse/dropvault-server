@@ -37,28 +37,22 @@ import javax.ws.rs.core.UriInfo;
 @Stateless
 @Path("login")
 public class LoginRestService {
-    
+
     @EJB
     private UsersDAO users;
-    
+
     @GET
     public Response login(@QueryParam("username") String username,
             @QueryParam("password") String password,
             @Context UriInfo uriInfo) {
-        
-        try {
-            User user = users.login(username, password);
-            
-            URI davUri = uriInfo.getBaseUriBuilder()
-                    .path("dav")
-                    .path(URLEncoder.encode(user.getUsername()))
-                    .build();
-            
+
+        if (users.login(username, password)) {
+            URI davUri = uriInfo.getBaseUriBuilder().path("dav").path(URLEncoder.encode(username)).build();
+
             return Response.ok(davUri.toString()).build();
-        } catch (InvalidPasswordException ex) {
+        } else {
             return Response.status(401).entity("invalid_password").build();
         }
-        
+
     }
-    
 }

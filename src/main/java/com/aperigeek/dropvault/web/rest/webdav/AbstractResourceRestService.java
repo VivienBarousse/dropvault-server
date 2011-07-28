@@ -17,17 +17,14 @@
 package com.aperigeek.dropvault.web.rest.webdav;
 
 import com.aperigeek.dropvault.web.beans.Resource;
+import com.aperigeek.dropvault.web.beans.User;
 import com.aperigeek.dropvault.web.dao.MongoFileService;
 import com.aperigeek.dropvault.web.dao.ResourceNotFoundException;
 import com.aperigeek.dropvault.web.dao.user.InvalidPasswordException;
 import com.aperigeek.dropvault.web.dao.user.UsersDAO;
-import com.aperigeek.dropvault.web.service.HashService;
+import com.aperigeek.dropvault.web.service.AuthenticationService;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import javax.ejb.EJB;
 import javax.ws.rs.OPTIONS;
 import javax.ws.rs.core.Response.StatusType;
@@ -47,7 +44,6 @@ import net.java.dev.webdav.jaxrs.xml.properties.GetContentLength;
 import net.java.dev.webdav.jaxrs.xml.properties.GetContentType;
 import net.java.dev.webdav.jaxrs.xml.properties.GetLastModified;
 import net.java.dev.webdav.jaxrs.xml.properties.ResourceType;
-import org.apache.commons.codec.binary.Base64;
 
 /**
  *
@@ -56,7 +52,7 @@ import org.apache.commons.codec.binary.Base64;
 public abstract class AbstractResourceRestService {
     
     @EJB
-    private HashService hashService;
+    private AuthenticationService authenticationService;
     
     protected javax.ws.rs.core.Response propfind(UriInfo uriInfo,
             String user,
@@ -152,34 +148,13 @@ public abstract class AbstractResourceRestService {
             throw new InvalidPasswordException();
         }
         
-        Pattern headerPattern = Pattern.compile("Basic (.+)");
-        Matcher headerMatcher = headerPattern.matcher(header);
+        User user = authenticationService.checkAuthentication(header);
         
-        if (!headerMatcher.matches()) {
-            throw new ProtocolException("Invalid Authorization header");
-        }
-        
-        String b64 = headerMatcher.group(1);
-        String headerContent = new String(Base64.decodeBase64(b64));
-        
-        Pattern passwordPattern = Pattern.compile("(.+):([^:]+)");
-        Matcher passwordMatcher = passwordPattern.matcher(headerContent);
-
-        if (!passwordMatcher.matches()) {
-            throw new ProtocolException("Invalid authentication header");
-        }
-
-        String user = passwordMatcher.group(1);
-        String password = passwordMatcher.group(2);
-        String hashPassword = hashService.hash(password);
-        
-        getUsersDAO().login(user, hashPassword);
-        
-        if (!user.equals(username)) {
+        if (!user.getUsername().equals(username)) {
             throw new NotAuthorizedException();
         }
         
-        return password;
+        return user.getPassword();
     }
     
 }

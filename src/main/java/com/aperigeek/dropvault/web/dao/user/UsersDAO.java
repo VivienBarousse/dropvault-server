@@ -34,7 +34,7 @@ public class UsersDAO {
     @EJB
     private MongoService mongo;
     
-    public User login(String username, String passHash) throws InvalidPasswordException {
+    public boolean login(String username, String passHash) {
         DBCollection users = mongo.getDataBase().getCollection("users");
         
         DBObject filter = new BasicDBObjectBuilder()
@@ -45,10 +45,10 @@ public class UsersDAO {
         DBObject result = users.findOne(filter);
         
         if (result == null) {
-            throw new InvalidPasswordException();
+            return false;
         }
         
-        return new User(username);
+        return true;
     }
     
 }
