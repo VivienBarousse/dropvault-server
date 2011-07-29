@@ -26,6 +26,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.util.logging.Level;
@@ -286,8 +287,14 @@ public class ResourceRestService extends AbstractResourceRestService {
             return javax.ws.rs.core.Response.status(400).build();
         }
         
-        String uri = URLDecoder.decode(uriInfo.getRequestUri().toString());
-        String dest = URLDecoder.decode(destination).substring(uri.length() - resource.length());
+        URI destUri = URI.create(destination);
+        URI baseUri = uriInfo.getBaseUriBuilder().path("dav").path(user).build();
+        String dest = baseUri.relativize(destUri).toString();
+        try {
+            dest = URLDecoder.decode(dest, "UTF-8");
+        } catch (UnsupportedEncodingException ex) {
+            throw new RuntimeException(ex);
+        }
         
         Resource res;
         try {
