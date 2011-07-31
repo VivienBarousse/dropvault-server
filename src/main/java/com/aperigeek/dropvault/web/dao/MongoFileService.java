@@ -276,6 +276,7 @@ public class MongoFileService {
             
             metadata.put("name", path[path.length - 1]);
             
+            indexService.remove(username, new String(password), child.getId().toString());
             indexService.index(username, new String(password), child.getId().toString(), metadata);
         } catch (Exception ex) {
             Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, "Index failed for " + path[path.length - 1], ex);
