@@ -209,9 +209,9 @@ public class MongoFileService {
         return buildResource(dbParent);
     }
     
-    public void put(String username, String resource, byte[] data, 
-            String contentType, char[] password) throws ResourceNotFoundException, IOException {
-        String[] path = resource.split("/");
+    public void put(final String username, String resource, final byte[] data, 
+            String contentType, final char[] password) throws ResourceNotFoundException, IOException {
+        final String[] path = resource.split("/");
         Resource parent = getRootFolder(username);
         for (int i = 0; i < path.length - 1; i++) {
             parent = getChild(parent, path[i]);
@@ -269,18 +269,24 @@ public class MongoFileService {
             child = buildResource(childObj);
         }
         
-        try {
-            Map<String, String> metadata = extractionService.extractContent(path[path.length - 1], 
-                    new ByteArrayInputStream(data), 
-                    contentType);
-            
-            metadata.put("name", path[path.length - 1]);
-            
-            indexService.remove(username, new String(password), child.getId().toString());
-            indexService.index(username, new String(password), child.getId().toString(), metadata);
-        } catch (Exception ex) {
-            Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, "Index failed for " + path[path.length - 1], ex);
-        }
+        final String fContentType = contentType;
+        final Resource fChild = child;
+        new Thread() {
+            public void run() {
+                try {
+                    Map<String, String> metadata = extractionService.extractContent(path[path.length - 1], 
+                            new ByteArrayInputStream(data), 
+                            fContentType);
+
+                    metadata.put("name", path[path.length - 1]);
+
+                    indexService.remove(username, new String(password), fChild.getId().toString());
+                    indexService.index(username, new String(password), fChild.getId().toString(), metadata);
+                } catch (Exception ex) {
+                    Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, "Index failed for " + path[path.length - 1], ex);
+                }
+            }
+        }.start();
     }
     
     public void move(String username, Resource source, String dest) throws ResourceNotFoundException {
