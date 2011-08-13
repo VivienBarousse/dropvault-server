@@ -406,7 +406,13 @@ public class MongoFileService {
     
     protected File createDataFile(byte[] data, String username, char[] password) throws IOException {
         try {
-            File file = new File(storageFolder, UUID.randomUUID().toString());
+            String fileName = UUID.randomUUID().toString();
+            
+            File folder = new File(storageFolder, username);
+            folder = new File(folder, fileName.substring(0, 2));
+            folder.mkdirs();
+                    
+            File file = new File(folder, fileName);
             
             Cipher cipher = Cipher.getInstance("Blowfish");
             cipher.init(Cipher.ENCRYPT_MODE, getSecretKey(username, password));
