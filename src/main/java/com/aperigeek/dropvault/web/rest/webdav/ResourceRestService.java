@@ -22,6 +22,7 @@ import com.aperigeek.dropvault.web.dao.ResourceAlreadyExistsException;
 import com.aperigeek.dropvault.web.dao.ResourceNotFoundException;
 import com.aperigeek.dropvault.web.dao.user.InvalidPasswordException;
 import com.aperigeek.dropvault.web.dao.user.UsersDAO;
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -29,8 +30,6 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URLDecoder;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
 import javax.ws.rs.Consumes;
@@ -152,9 +151,10 @@ public class ResourceRestService extends AbstractResourceRestService {
         
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream((int) contentLength);
+            BufferedInputStream bin = new BufferedInputStream(in);
             byte[] buffer = new byte[4096];
             int readed;
-            while ((readed = in.read(buffer)) != -1) {
+            while ((readed = bin.read(buffer)) != -1) {
                 out.write(buffer, 0, readed);
             }
             
