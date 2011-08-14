@@ -226,7 +226,7 @@ public class MongoFileService {
         InputStream tmpIn = new BufferedInputStream(data);
         byte[] buffer = new byte[2048];
         int readed;
-        while ((readed = tmpIn.read()) != -1) {
+        while ((readed = tmpIn.read(buffer)) != -1) {
             tmpOut.write(buffer, 0, readed);
         }
         tmpOut.close();
@@ -286,7 +286,7 @@ public class MongoFileService {
             public void run() {
                 try {
                     Map<String, String> metadata = extractionService.extractContent(path[path.length - 1], 
-                            data, 
+                            new FileInputStream(tmpFile), 
                             fContentType);
 
                     metadata.put("name", path[path.length - 1]);
