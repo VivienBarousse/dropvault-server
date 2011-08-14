@@ -166,7 +166,7 @@ public class MongoFileService {
         
         DBObject obj = new BasicDBObject();
         obj.put("type", Resource.ResourceType.FOLDER.toString());
-        obj.put("user", "viv");
+        obj.put("user", username);
         obj.put("name", path[path.length - 1]);
         obj.put("creationDate", new Date());
         obj.put("modificationDate", new Date());
