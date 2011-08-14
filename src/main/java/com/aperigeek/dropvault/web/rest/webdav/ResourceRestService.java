@@ -25,6 +25,7 @@ import com.aperigeek.dropvault.web.dao.user.UsersDAO;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -149,16 +150,8 @@ public class ResourceRestService extends AbstractResourceRestService {
             return javax.ws.rs.core.Response.status(400).build();
         }
         
-        try {
-            ByteArrayOutputStream out = new ByteArrayOutputStream((int) contentLength);
-            BufferedInputStream bin = new BufferedInputStream(in);
-            byte[] buffer = new byte[4096];
-            int readed;
-            while ((readed = bin.read(buffer)) != -1) {
-                out.write(buffer, 0, readed);
-            }
-            
-            fileService.put(user, resource, out.toByteArray(), contentType, password.toCharArray());
+        try {            
+            fileService.put(user, resource, in, contentLength, contentType, password.toCharArray());
             
             return javax.ws.rs.core.Response.ok().build();
         } catch (IOException ex) {
@@ -259,7 +252,7 @@ public class ResourceRestService extends AbstractResourceRestService {
         
         byte[] data = fileService.get(user, res, password.toCharArray());
         try {
-            fileService.put(user, dest, data, res.getContentType(), password.toCharArray());
+            fileService.put(user, dest, new ByteArrayInputStream(data), data.length, res.getContentType(), password.toCharArray());
         } catch (ResourceNotFoundException ex) {
             javax.ws.rs.core.Response.status(209).build();
         }

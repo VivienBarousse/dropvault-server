@@ -18,7 +18,7 @@ package com.aperigeek.dropvault.web.service;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.logging.Level;
+import java.io.InputStream;
 import java.util.logging.Logger;
 import javax.ejb.Stateless;
 import org.apache.tika.Tika;
@@ -42,10 +42,10 @@ public class FileTypeDetectionService {
      * @param data File content
      * @return Detected file type
      */
-    public String detectFileType(String name, byte[] data) {
+    public String detectFileType(String name, InputStream data) {
         Tika tika = new Tika();
         try {
-            return tika.detect(new ByteArrayInputStream(data), name);
+            return tika.detect(data, name);
         } catch (IOException ex) {
             throw new RuntimeException(
                     "IO exception during manipulation of byte array. Weird...",

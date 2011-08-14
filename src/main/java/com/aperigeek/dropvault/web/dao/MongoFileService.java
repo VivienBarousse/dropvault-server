@@ -209,7 +209,8 @@ public class MongoFileService {
         return buildResource(dbParent);
     }
     
-    public void put(final String username, String resource, final byte[] data, 
+    public void put(final String username, String resource, final InputStream data, 
+            long length,
             String contentType, final char[] password) throws ResourceNotFoundException, IOException {
         final String[] path = resource.split("/");
         Resource parent = getRootFolder(username);
@@ -220,22 +221,32 @@ public class MongoFileService {
             }
         }
         
+        final File tmpFile = File.createTempFile("dropvault", path[path.length - 1]);
+        OutputStream tmpOut = new BufferedOutputStream(new FileOutputStream(tmpFile));
+        InputStream tmpIn = new BufferedInputStream(data);
+        byte[] buffer = new byte[2048];
+        int readed;
+        while ((readed = tmpIn.read()) != -1) {
+            tmpOut.write(buffer, 0, readed);
+        }
+        tmpOut.close();
+        
         if (contentType == null) {
             contentType = fileTypeDetectionService
-                    .detectFileType(path[path.length - 1], data);
+                    .detectFileType(path[path.length - 1], new FileInputStream(tmpFile));
         }
         
         DBCollection files = mongo.getDataBase().getCollection("files");
         DBCollection contents = mongo.getDataBase().getCollection("contents");
         
-        File dataFile = createDataFile(data, username, password);
+        File dataFile = createDataFile(new FileInputStream(tmpFile), username, password);
         
         Resource child = getChild(parent, path[path.length - 1]);
         if (child != null) {
             DBObject filter = new BasicDBObject();
             filter.put("_id", child.getId());
             DBObject update = new BasicDBObject("modificationDate", new Date());
-            update.put("contentLength", data.length);
+            update.put("contentLength", length);
             update.put("contentType", contentType);
             files.update(filter, new BasicDBObject("$set", update));
             
@@ -252,7 +263,7 @@ public class MongoFileService {
             childObj.put("creationDate", new Date());
             childObj.put("modificationDate", new Date());
             childObj.put("contentType", contentType);
-            childObj.put("contentLength", data.length);
+            childObj.put("contentLength", length);
             
             files.insert(childObj);
             
@@ -275,13 +286,15 @@ public class MongoFileService {
             public void run() {
                 try {
                     Map<String, String> metadata = extractionService.extractContent(path[path.length - 1], 
-                            new ByteArrayInputStream(data), 
+                            data, 
                             fContentType);
 
                     metadata.put("name", path[path.length - 1]);
 
                     indexService.remove(username, new String(password), fChild.getId().toString());
                     indexService.index(username, new String(password), fChild.getId().toString(), metadata);
+                    
+                    tmpFile.delete();
                 } catch (Exception ex) {
                     Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, "Index failed for " + path[path.length - 1], ex);
                 }
@@ -377,7 +390,7 @@ public class MongoFileService {
         
         if ("FILE".equals(obj.get("type"))) {
             childRes.setType(Resource.ResourceType.FILE);
-            childRes.setContentLength((Integer) obj.get("contentLength"));
+            childRes.setContentLength(((Number) obj.get("contentLength")).intValue()); // TODO: move to longValue
             childRes.setContentType((String) obj.get("contentType"));
         }
         
@@ -410,7 +423,7 @@ public class MongoFileService {
         }
     }
     
-    protected File createDataFile(byte[] data, String username, char[] password) throws IOException {
+    protected File createDataFile(InputStream data, String username, char[] password) throws IOException {
         try {
             String fileName = UUID.randomUUID().toString();
             
@@ -426,7 +439,13 @@ public class MongoFileService {
             OutputStream fOut = new BufferedOutputStream(new FileOutputStream(file));
             CipherOutputStream out = new CipherOutputStream(fOut, cipher);
             
-            out.write(data);
+            InputStream in = new BufferedInputStream(data);
+            byte[] buffer = new byte[2048];
+            int readed;
+            while ((readed = in.read(buffer)) != -1) {
+                out.write(buffer, 0, readed);
+            }
+            in.close();
             
             out.flush();
             out.close();
