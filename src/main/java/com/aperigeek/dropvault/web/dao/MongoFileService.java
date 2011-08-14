@@ -36,6 +36,8 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.security.KeyStore;
 import java.security.KeyStore.SecretKeyEntry;
 import java.util.ArrayList;
@@ -43,6 +45,8 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.crypto.Cipher;
@@ -52,6 +56,7 @@ import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.ejb.EJB;
 import javax.ejb.Stateless;
+import org.apache.commons.io.input.TeeInputStream;
 import org.bson.types.ObjectId;
 
 /**
@@ -209,7 +214,7 @@ public class MongoFileService {
         return buildResource(dbParent);
     }
     
-    public void put(final String username, String resource, final InputStream data, 
+    public void put(final String username, String resource, InputStream data, 
             long length,
             String contentType, final char[] password) throws ResourceNotFoundException, IOException {
         final String[] path = resource.split("/");
@@ -224,11 +229,25 @@ public class MongoFileService {
         DBCollection files = mongo.getDataBase().getCollection("files");
         DBCollection contents = mongo.getDataBase().getCollection("contents");
         
+        ContentDetector contentDetector = null;
+        if (contentType == null) {
+            PipedInputStream pipeIn = new PipedInputStream();
+            PipedOutputStream pipeOut = new PipedOutputStream(pipeIn);
+            TeeInputStream tee = new TeeInputStream(data, pipeOut, true);
+            contentDetector = new ContentDetector(path[path.length - 1], pipeIn);
+            contentDetector.start();
+            data = tee;
+        }
+        
         final File dataFile = createDataFile(data, username, password);
         
-        if (contentType == null) {
-            contentType = fileTypeDetectionService
-                    .detectFileType(path[path.length - 1], readFile(dataFile, username, password));
+        if (contentDetector != null) {
+            try {
+                contentDetector.join();
+                contentType = contentDetector.getContentType();
+            } catch (InterruptedException ex) {
+                Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, null, ex);
+            }
         }
         
         Resource child = getChild(parent, path[path.length - 1]);
@@ -435,6 +454,8 @@ public class MongoFileService {
             // TODO: better exception handling
             Logger.getAnonymousLogger().log(Level.SEVERE, "ERROR", ex);
             throw new RuntimeException(ex);
+        } finally {
+            data.close();
         }
     }
     
@@ -471,6 +492,36 @@ public class MongoFileService {
             // TODO: better exception handling
             Logger.getAnonymousLogger().log(Level.SEVERE, "ERROR", ex);
             throw new RuntimeException(ex);
+        }
+    }
+    
+    private class ContentDetector extends Thread {
+
+        private String fileName;
+        
+        private InputStream in;
+        
+        private String contentType;
+
+        public ContentDetector(String fileName, InputStream in) {
+            this.fileName = fileName;
+            this.in = in;
+        }
+
+        @Override
+        public void run() {
+            contentType = fileTypeDetectionService.detectFileType(fileName, in);
+            byte[] buffer = new byte[2048];
+            try {
+                // Discard bytes in the stream that were not consumed by Tika
+                while (in.read(buffer) != -1);
+            } catch (IOException ex) {
+                Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+
+        public String getContentType() {
+            return contentType;
         }
     }
     
