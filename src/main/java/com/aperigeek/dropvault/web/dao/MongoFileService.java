@@ -221,25 +221,15 @@ public class MongoFileService {
             }
         }
         
-        final File tmpFile = File.createTempFile("dropvault", path[path.length - 1]);
-        OutputStream tmpOut = new BufferedOutputStream(new FileOutputStream(tmpFile));
-        InputStream tmpIn = new BufferedInputStream(data);
-        byte[] buffer = new byte[2048];
-        int readed;
-        while ((readed = tmpIn.read(buffer)) != -1) {
-            tmpOut.write(buffer, 0, readed);
-        }
-        tmpOut.close();
-        
-        if (contentType == null) {
-            contentType = fileTypeDetectionService
-                    .detectFileType(path[path.length - 1], new FileInputStream(tmpFile));
-        }
-        
         DBCollection files = mongo.getDataBase().getCollection("files");
         DBCollection contents = mongo.getDataBase().getCollection("contents");
         
-        File dataFile = createDataFile(new FileInputStream(tmpFile), username, password);
+        final File dataFile = createDataFile(data, username, password);
+        
+        if (contentType == null) {
+            contentType = fileTypeDetectionService
+                    .detectFileType(path[path.length - 1], readFile(dataFile, username, password));
+        }
         
         Resource child = getChild(parent, path[path.length - 1]);
         if (child != null) {
@@ -286,15 +276,13 @@ public class MongoFileService {
             public void run() {
                 try {
                     Map<String, String> metadata = extractionService.extractContent(path[path.length - 1], 
-                            new FileInputStream(tmpFile), 
+                            readFile(dataFile, username, password),
                             fContentType);
 
                     metadata.put("name", path[path.length - 1]);
 
                     indexService.remove(username, new String(password), fChild.getId().toString());
                     indexService.index(username, new String(password), fChild.getId().toString(), metadata);
-                    
-                    tmpFile.delete();
                 } catch (Exception ex) {
                     Logger.getLogger(MongoFileService.class.getName()).log(Level.SEVERE, "Index failed for " + path[path.length - 1], ex);
                 }
@@ -333,23 +321,21 @@ public class MongoFileService {
                 new BasicDBObject("modificationDate", new Date())));
     }
     
-    public byte[] get(String username, Resource resource, char[] password) throws IOException {
+    public InputStream get(String username, Resource resource, char[] password) throws IOException {
         DBCollection col = mongo.getDataBase().getCollection("contents");
         
         DBObject filter = new BasicDBObject();
         filter.put("resource", resource.getId());
         
         DBObject result = col.findOne(filter);
-        byte[] binary;
         if (result.containsField("file")) {
             String fileName = (String) result.get("file");
             File dataFile = new File(fileName);
-            binary = readFile(dataFile, username, password);
+            return readFile(dataFile, username, password);
         } else {
-            binary = (byte[]) result.get("binary");
+            byte[] binary = (byte[]) result.get("binary");
+            return new ByteArrayInputStream(binary);
         }
-        
-        return binary;
     }
     
     public void delete(String username, String password, Resource resource) {
@@ -397,7 +383,7 @@ public class MongoFileService {
         return childRes;
     }
     
-    protected byte[] readFile(File file, String username, char[] password) throws IOException {
+    protected InputStream readFile(File file, String username, char[] password) throws IOException {
         try {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             InputStream fIn = new BufferedInputStream(new FileInputStream(file));
@@ -407,15 +393,7 @@ public class MongoFileService {
             
             CipherInputStream in = new CipherInputStream(fIn, cipher);
             
-            byte[] buffer = new byte[4096];
-            int readed;
-            while ((readed = in.read(buffer)) != -1) {
-                out.write(buffer, 0, readed);
-            }
-            
-            in.close();
-            
-            return out.toByteArray();
+            return in;
         } catch (Exception ex) {
             // TODO: better exception handling
             Logger.getAnonymousLogger().log(Level.SEVERE, "ERROR", ex);

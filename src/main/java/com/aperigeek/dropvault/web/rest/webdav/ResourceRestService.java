@@ -22,10 +22,7 @@ import com.aperigeek.dropvault.web.dao.ResourceAlreadyExistsException;
 import com.aperigeek.dropvault.web.dao.ResourceNotFoundException;
 import com.aperigeek.dropvault.web.dao.user.InvalidPasswordException;
 import com.aperigeek.dropvault.web.dao.user.UsersDAO;
-import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -116,8 +113,7 @@ public class ResourceRestService extends AbstractResourceRestService {
             return javax.ws.rs.core.Response.status(404).build();
         }
         
-        byte[] data = fileService.get(user, res, password.toCharArray());
-        ByteArrayInputStream in = new ByteArrayInputStream(data);
+        InputStream in = fileService.get(user, res, password.toCharArray());
         
         return javax.ws.rs.core.Response.ok()
                 .header("Content-Type", res.getContentType())
@@ -250,9 +246,9 @@ public class ResourceRestService extends AbstractResourceRestService {
             return javax.ws.rs.core.Response.status(404).build();
         }
         
-        byte[] data = fileService.get(user, res, password.toCharArray());
+        InputStream data = fileService.get(user, res, password.toCharArray());
         try {
-            fileService.put(user, dest, new ByteArrayInputStream(data), data.length, res.getContentType(), password.toCharArray());
+            fileService.put(user, dest, data, res.getContentLength(), res.getContentType(), password.toCharArray());
         } catch (ResourceNotFoundException ex) {
             javax.ws.rs.core.Response.status(209).build();
         }
