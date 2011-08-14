@@ -154,15 +154,20 @@ public class MongoFileService {
         return childRes;
     }
     
+    // TODO: implement support for ..
     public Resource getResourceAt(Resource parent, String... path) throws ResourceNotFoundException {
         DBCollection col = mongo.getDataBase().getCollection("files");
         
         DBObject obj = null;
         ObjectId id = parent.getId();
         
-        for (String str : path) {
+        for (String name : path) {
+            if ("".equals(name) || ".".equals(name)) {
+                continue;
+            }
+            
             DBObject filter = new BasicDBObjectBuilder()
-                    .add("name", str)
+                    .add("name", name)
                     .add("parent", id)
                     .get();
             obj = col.findOne(filter);
