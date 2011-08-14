@@ -41,6 +41,7 @@ import java.io.PipedOutputStream;
 import java.security.KeyStore;
 import java.security.KeyStore.SecretKeyEntry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,24 @@ public class MongoFileService {
         return childRes;
     }
     
+    public Resource getResourceAt(Resource parent, String... path) {
+        DBCollection col = mongo.getDataBase().getCollection("files");
+        
+        DBObject obj = null;
+        ObjectId id = parent.getId();
+        
+        for (String str : path) {
+            DBObject filter = new BasicDBObjectBuilder()
+                    .add("name", str)
+                    .add("parent", id)
+                    .get();
+            obj = col.findOne(filter);
+            id = (ObjectId) obj.get("_id");
+        }
+        
+        return buildResource(obj);
+    }
+    
     public Resource mkcol(String username, String resource) throws ResourceAlreadyExistsException, ResourceNotFoundException {
         String[] path = resource.split("/");
         Resource parent = getRootFolder(username);
@@ -196,13 +215,7 @@ public class MongoFileService {
     
     public Resource getResource(String username, String resource) throws ResourceNotFoundException {
         String[] path = resource.split("/");
-        Resource parent = getRootFolder(username);
-        for (int i = 0; i < path.length; i++) {
-            if (parent == null) {
-                throw new ResourceNotFoundException();
-            }
-            parent = getChild(parent, path[i]);
-        }
+        Resource parent = getResourceAt(getRootFolder(username), path);
         return parent;
     }
     
@@ -217,14 +230,10 @@ public class MongoFileService {
     public void put(final String username, String resource, InputStream data, 
             long length,
             String contentType, final char[] password) throws ResourceNotFoundException, IOException {
+        
         final String[] path = resource.split("/");
-        Resource parent = getRootFolder(username);
-        for (int i = 0; i < path.length - 1; i++) {
-            parent = getChild(parent, path[i]);
-            if (parent == null) {
-                throw new ResourceNotFoundException();
-            }
-        }
+        Resource parent = getResourceAt(getRootFolder(username), 
+                Arrays.copyOfRange(path, 0, path.length - 2));
         
         DBCollection files = mongo.getDataBase().getCollection("files");
         DBCollection contents = mongo.getDataBase().getCollection("contents");
