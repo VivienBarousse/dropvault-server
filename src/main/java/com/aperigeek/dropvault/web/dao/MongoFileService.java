@@ -154,7 +154,7 @@ public class MongoFileService {
         return childRes;
     }
     
-    public Resource getResourceAt(Resource parent, String... path) {
+    public Resource getResourceAt(Resource parent, String... path) throws ResourceNotFoundException {
         DBCollection col = mongo.getDataBase().getCollection("files");
         
         DBObject obj = null;
@@ -166,6 +166,11 @@ public class MongoFileService {
                     .add("parent", id)
                     .get();
             obj = col.findOne(filter);
+            
+            if (obj == null) {
+                throw new ResourceNotFoundException();
+            }
+            
             id = (ObjectId) obj.get("_id");
         }
         
@@ -174,13 +179,8 @@ public class MongoFileService {
     
     public Resource mkcol(String username, String resource) throws ResourceAlreadyExistsException, ResourceNotFoundException {
         String[] path = resource.split("/");
-        Resource parent = getRootFolder(username);
-        for (int i = 0; i < path.length - 1; i++) {
-            parent = getChild(parent, path[i]);
-            if (parent == null) {
-                throw new ResourceNotFoundException();
-            }
-        }
+        Resource parent = getResourceAt(getRootFolder(username), 
+                Arrays.copyOfRange(path, 0, path.length - 2));
         
         if (getChild(parent, path[path.length - 1]) != null) {
             throw new ResourceAlreadyExistsException();
